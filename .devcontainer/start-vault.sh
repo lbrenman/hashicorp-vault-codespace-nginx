@@ -63,18 +63,24 @@ if ! vault auth list 2>/dev/null | grep -q "userpass"; then
   echo "Bootstrap complete."
 fi
 
-# ── Install Nginx with Lua support ───────────────────────────────────────────
-if ! command -v nginx &>/dev/null; then
-  echo "Installing Nginx + Lua modules..."
+# ── Install OpenResty (Nginx + Lua bundled) ───────────────────────────────────
+if ! command -v /usr/local/openresty/nginx/sbin/nginx &>/dev/null; then
+  echo "Installing OpenResty..."
+  sudo apt-get install -y curl gnupg > /dev/null
+  curl -fsSL https://openresty.org/package/pubkey.gpg \
+    | sudo gpg --dearmor -o /usr/share/keyrings/openresty.gpg
+  echo "deb [signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/ubuntu $(lsb_release -cs) main" \
+    | sudo tee /etc/apt/sources.list.d/openresty.list > /dev/null
   sudo apt-get update -qq
-  sudo apt-get install -y nginx libnginx-mod-http-lua lua-resty-http > /dev/null
-  echo "Nginx installed."
+  sudo apt-get install -y openresty > /dev/null
+  echo "OpenResty installed."
 fi
 
-# ── Start Nginx proxy (port 8100 → 8200) ────────────────────────────────────
-echo "Starting Nginx Basic Auth proxy on port 8100..."
-nginx -c "$REPO_DIR/nginx/nginx.conf" 2>/tmp/nginx-start.log || {
-  echo "⚠️  Nginx failed to start. Check /tmp/nginx-start.log"
+# ── Start OpenResty proxy (port 8100 → 8200) ─────────────────────────────────
+echo "Starting Nginx/OpenResty Basic Auth proxy on port 8100..."
+sudo /usr/local/openresty/nginx/sbin/nginx \
+  -c "$REPO_DIR/nginx/nginx.conf" 2>/tmp/nginx-start.log || {
+  echo "⚠️  OpenResty failed to start. Check /tmp/nginx-start.log"
   cat /tmp/nginx-start.log
 }
 

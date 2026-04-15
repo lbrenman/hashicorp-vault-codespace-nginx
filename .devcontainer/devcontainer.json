@@ -1,0 +1,25 @@
+{
+  "name": "HashiCorp Vault Dev Environment (with Nginx Proxy)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  },
+  "forwardPorts": [8200, 8100],
+  "portsAttributes": {
+    "8200": {
+      "label": "Vault UI",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    },
+    "8100": {
+      "label": "Vault Basic Auth Proxy",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    }
+  },
+  "postCreateCommand": "chmod +x .devcontainer/start-vault.sh get-token.sh",
+  "postStartCommand": "bash .devcontainer/start-vault.sh",
+  "remoteEnv": {
+    "VAULT_ADDR": "http://127.0.0.1:8200"
+  }
+}

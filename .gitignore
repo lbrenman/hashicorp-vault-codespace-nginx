@@ -1,0 +1,36 @@
+# Vault persistent data - NEVER commit
+vault-data/
+/workspaces/vault-data/
+
+# Vault init file - contains unseal key and root token - NEVER commit
+.vault-init
+*.vault-init
+
+# Vault logs and PIDs
+vault.log
+nginx.log
+*.log
+*.pid
+
+# Vault tokens and credentials - NEVER commit these
+.vault-token
+vault-token.txt
+*.token
+
+# Policy files with sensitive content
+generated-policies/
+
+# Environment files
+.env
+.env.local
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo

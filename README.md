@@ -87,27 +87,24 @@ cat /workspaces/vault-data/.vault-init | jq -r '.root_token'
 
 ## Service Management
 
-Both Vault and OpenResty run as systemd services and restart automatically if they crash:
+Both Vault and OpenResty run as background processes. To check status and manage them:
 
 ```bash
-# Check status
-sudo systemctl status vault
-sudo systemctl status openresty
+# Check if running
+ps aux | grep vault | grep -v grep
+ps aux | grep nginx | grep -v grep
+
+# Check health
+curl -s http://127.0.0.1:8200/v1/sys/health | jq .
+curl -s http://127.0.0.1:8100/v1/sys/health | jq .
 
 # View logs
-sudo journalctl -u vault -f
+tail -f /tmp/vault.log
+tail -f /tmp/nginx.log
 cat /tmp/nginx-access.log
-cat /tmp/nginx-error.log
 
-# Restart manually
-sudo systemctl restart vault
-sudo systemctl restart openresty
-```
-
-After restarting Vault you must unseal it:
-```bash
-UNSEAL_KEY=$(jq -r '.unseal_keys_b64[0]' /workspaces/vault-data/.vault-init)
-vault operator unseal "$UNSEAL_KEY"
+# Restart everything
+bash .devcontainer/start-vault.sh
 ```
 
 ---

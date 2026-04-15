@@ -23,32 +23,21 @@ fi
 # Remove IPC_LOCK capability — Codespaces blocks it
 sudo setcap cap_ipc_lock=-ep $(which vault) 2>/dev/null || true
 
-# ── Run Vault as a systemd service ───────────────────────────────────────────
-sudo tee /etc/systemd/system/vault.service > /dev/null << EOF
-[Unit]
-Description=HashiCorp Vault
-After=network.target
-
-[Service]
-User=$(whoami)
-Environment=VAULT_DISABLE_MLOCK=true
-ExecStart=$(which vault) server -config=$CONFIG
-Restart=always
-RestartSec=5
-StandardOutput=append:/tmp/vault.log
-StandardError=append:/tmp/vault.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable vault 2>/dev/null || true
-sudo systemctl restart vault
+# ── Start Vault ───────────────────────────────────────────────────────────────
+mkdir -p "$DATA_DIR"
+echo "Starting Vault..."
+nohup vault server -config="$CONFIG" > /tmp/vault.log 2>&1 &
+echo $! > /tmp/vault.pid
 sleep 5
 
+# Verify Vault started
+if ! curl -s http://127.0.0.1:8200/v1/sys/health > /dev/null 2>&1; then
+  echo "⚠️  Vault failed to start. Check /tmp/vault.log"
+  cat /tmp/vault.log
+  exit 1
+fi
+
 # ── Initialize (first run only) ─────────────────────────────────────────────
-mkdir -p "$DATA_DIR"
 if [ ! -f "$INIT_FILE" ]; then
   echo "First run — initializing Vault..."
   vault operator init \
@@ -93,26 +82,24 @@ if ! command -v /usr/local/openresty/nginx/sbin/nginx &>/dev/null; then
   echo "OpenResty installed."
 fi
 
-# ── Run OpenResty as a systemd service ───────────────────────────────────────
-sudo tee /etc/systemd/system/openresty.service > /dev/null << EOF
-[Unit]
-Description=OpenResty Vault Proxy
-After=vault.service
-
-[Service]
-ExecStart=/usr/local/openresty/nginx/sbin/nginx -c $REPO_DIR/nginx/nginx.conf -g 'daemon off;'
-ExecReload=/usr/local/openresty/nginx/sbin/nginx -s reload
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable openresty 2>/dev/null || true
-sudo systemctl restart openresty
+# ── Start OpenResty ───────────────────────────────────────────────────────────
+echo "Starting OpenResty proxy on port 8100..."
+sudo pkill -f "openresty" 2>/dev/null || true
+sudo pkill -f "nginx.*8100" 2>/dev/null || true
+sleep 1
+sudo nohup /usr/local/openresty/nginx/sbin/nginx \
+  -c "$REPO_DIR/nginx/nginx.conf" \
+  -g 'daemon off;' > /tmp/nginx.log 2>&1 &
+echo $! > /tmp/nginx.pid
 sleep 2
+
+# Verify OpenResty started
+if ! curl -s http://127.0.0.1:8100/v1/sys/health > /dev/null 2>&1; then
+  echo "⚠️  OpenResty failed to start. Check /tmp/nginx.log"
+  cat /tmp/nginx.log
+else
+  echo "OpenResty started."
+fi
 
 # ── Write env vars to shell profile ─────────────────────────────────────────
 grep -q "VAULT_ADDR" "$HOME/.bashrc" 2>/dev/null || \
@@ -136,9 +123,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "  To retrieve credentials later, run: bash get-token.sh"
 echo ""
-echo "✅ Vault + OpenResty are running as systemd services!"
-echo "   sudo systemctl status vault"
-echo "   sudo systemctl status openresty"
+echo "✅ Vault + OpenResty are running!"
 echo ""
 echo "⚠️  The init file (unseal key + root token) is stored at:"
 echo "   $INIT_FILE"

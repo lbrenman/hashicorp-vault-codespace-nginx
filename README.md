@@ -65,7 +65,7 @@ cat /workspaces/vault-data/.vault-init | jq -r '.root_token'
 | Base URL | `https://<codespace-name>-8100.app.github.dev` |
 | Namespace | `root` |
 | Authentication Type | `Basic` |
-| Mount | `secret` |
+| Mount | `userpass` |
 | Username | `demo` |
 | Password | `demo1234` |
 

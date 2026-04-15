@@ -86,7 +86,7 @@ fi
 echo "Starting OpenResty proxy on port 8100..."
 sudo pkill -f "openresty" 2>/dev/null || true
 sudo pkill -f "nginx.*8100" 2>/dev/null || true
-sudo rm -f /tmp/nginx.pid
+sudo rm -f /run/nginx-vault.pid /tmp/nginx.pid
 sleep 1
 sudo nohup /usr/local/openresty/nginx/sbin/nginx \
   -c "$REPO_DIR/nginx/nginx.conf" \

@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 REPO_DIR="/workspaces/$(basename $PWD)"
 DATA_DIR="/workspaces/vault-data"
@@ -29,7 +28,15 @@ export VAULT_DISABLE_MLOCK=true
 
 echo "Starting Vault server (file storage)..."
 vault server -config="$CONFIG" > /tmp/vault.log 2>&1 &
-sleep 3
+VAULT_PID=$!
+sleep 5
+
+# Verify Vault started
+if ! kill -0 $VAULT_PID 2>/dev/null; then
+  echo "⚠️  Vault failed to start. Check /tmp/vault.log"
+  cat /tmp/vault.log
+  exit 1
+fi
 
 # ── Initialize (first run only) ─────────────────────────────────────────────
 if [ ! -f "$INIT_FILE" ]; then
@@ -37,9 +44,9 @@ if [ ! -f "$INIT_FILE" ]; then
   vault operator init \
     -key-shares=1 \
     -key-threshold=1 \
-    -format=json > "$INIT_FILE"
+    -format=json > "$INIT_FILE" || { echo "Init failed"; cat /tmp/vault.log; exit 1; }
   chmod 600 "$INIT_FILE"
-  echo "Vault initialized. Init data saved to $INIT_FILE"
+  echo "Vault initialized."
 fi
 
 # ── Unseal ───────────────────────────────────────────────────────────────────
@@ -47,7 +54,7 @@ UNSEAL_KEY=$(jq -r '.unseal_keys_b64[0]' "$INIT_FILE")
 ROOT_TOKEN=$(jq -r '.root_token' "$INIT_FILE")
 
 echo "Unsealing Vault..."
-vault operator unseal "$UNSEAL_KEY" > /dev/null
+vault operator unseal "$UNSEAL_KEY" > /dev/null || { echo "Unseal failed"; exit 1; }
 
 export VAULT_TOKEN="$ROOT_TOKEN"
 
@@ -63,7 +70,7 @@ if ! vault auth list 2>/dev/null | grep -q "userpass"; then
   echo "Bootstrap complete."
 fi
 
-# ── Install OpenResty (Nginx + Lua bundled) ───────────────────────────────────
+# ── Install OpenResty ────────────────────────────────────────────────────────
 if ! command -v /usr/local/openresty/nginx/sbin/nginx &>/dev/null; then
   echo "Installing OpenResty..."
   sudo apt-get install -y curl gnupg > /dev/null
@@ -77,12 +84,27 @@ if ! command -v /usr/local/openresty/nginx/sbin/nginx &>/dev/null; then
 fi
 
 # ── Start OpenResty proxy (port 8100 → 8200) ─────────────────────────────────
-echo "Starting OpenResty Basic Auth proxy on port 8100..."
+echo "Starting OpenResty proxy on port 8100..."
+sudo pkill -f openresty 2>/dev/null || true
+sudo pkill -f "nginx.*8100" 2>/dev/null || true
+sleep 1
 sudo /usr/local/openresty/nginx/sbin/nginx \
-  -c "$REPO_DIR/nginx/nginx.conf" > /tmp/nginx-start.log 2>&1 || {
+  -c "$REPO_DIR/nginx/nginx.conf" > /tmp/nginx-start.log 2>&1
+if [ $? -ne 0 ]; then
   echo "⚠️  OpenResty failed to start. Check /tmp/nginx-start.log"
   cat /tmp/nginx-start.log
-}
+else
+  echo "OpenResty started."
+fi
+
+# ── Write env vars to shell profile ─────────────────────────────────────────
+grep -q "VAULT_ADDR" "$HOME/.bashrc" 2>/dev/null || \
+  echo "export VAULT_ADDR='http://127.0.0.1:8200'" >> "$HOME/.bashrc"
+grep -q "VAULT_DISABLE_MLOCK" "$HOME/.bashrc" 2>/dev/null || \
+  echo "export VAULT_DISABLE_MLOCK=true" >> "$HOME/.bashrc"
+grep -q "VAULT_TOKEN" "$HOME/.bashrc" 2>/dev/null && \
+  sed -i "s|^export VAULT_TOKEN=.*|export VAULT_TOKEN='$ROOT_TOKEN'|" "$HOME/.bashrc" || \
+  echo "export VAULT_TOKEN='$ROOT_TOKEN'" >> "$HOME/.bashrc"
 
 # ── Print credentials ────────────────────────────────────────────────────────
 echo ""
@@ -93,24 +115,11 @@ echo "║  Root Token   : $ROOT_TOKEN"
 echo "║  Userpass     : demo / demo1234                      ║"
 echo "║  Vault UI     : http://localhost:8200/ui              ║"
 echo "║  Proxy (iPaaS): http://localhost:8100                 ║"
-echo "║    Accepts Basic Auth, forwards to Vault on 8200     ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
-echo "  To retrieve the token later, run: bash get-token.sh"
+echo "  To retrieve credentials later, run: bash get-token.sh"
 echo ""
-
-# ── Write env vars to shell profile ─────────────────────────────────────────
-grep -q "VAULT_ADDR" "$HOME/.bashrc" 2>/dev/null || \
-  echo "export VAULT_ADDR='http://127.0.0.1:8200'" >> "$HOME/.bashrc"
-grep -q "VAULT_TOKEN" "$HOME/.bashrc" 2>/dev/null && \
-  sed -i "s|^export VAULT_TOKEN=.*|export VAULT_TOKEN='$ROOT_TOKEN'|" "$HOME/.bashrc" || \
-  echo "export VAULT_TOKEN='$ROOT_TOKEN'" >> "$HOME/.bashrc"
-
-echo ""
-echo "✅ Vault is running!"
-echo "   Vault UI  : http://localhost:8200/ui"
-echo "   Proxy     : http://localhost:8100  (Basic Auth → Vault token)"
-echo "   Root Token: $ROOT_TOKEN"
+echo "✅ Vault + OpenResty proxy are running!"
 echo ""
 echo "⚠️  The init file (unseal key + root token) is stored at:"
 echo "   $INIT_FILE"

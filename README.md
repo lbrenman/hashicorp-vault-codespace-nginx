@@ -71,6 +71,10 @@ cat /workspaces/vault-data/.vault-init | jq -r '.root_token'
 
 > Find your codespace name in the **Ports** tab — the forwarded address for port 8100 is your Base URL.
 
+**How the proxy handles Fusion's requests:**
+
+Fusion constructs auth requests as `POST /auth/<mount>/login/<username>` without the `/v1/` prefix. The Nginx proxy automatically rewrites these to the correct Vault path `POST /v1/auth/userpass/login/<username>` and adds the `/v1/` prefix to all other requests as needed. This happens transparently — no changes needed in Fusion.
+
 ---
 
 ## Ports

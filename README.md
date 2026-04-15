@@ -1,6 +1,6 @@
-# HashiCorp Vault in GitHub Codespaces (with Nginx Basic Auth Proxy)
+# HashiCorp Vault in GitHub Codespaces (with OpenResty Proxy)
 
-A ready-to-run HashiCorp Vault development environment using GitHub Codespaces, with persistent file storage, userpass authentication, and an Nginx reverse proxy that accepts HTTP Basic Auth for iPaaS tools like Amplify Fusion.
+A ready-to-run HashiCorp Vault development environment using GitHub Codespaces, with persistent file storage, userpass authentication, and an OpenResty reverse proxy that translates iPaaS requests (e.g. Amplify Fusion) into native Vault API calls.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/lbrenman/hashicorp-vault-codespace-nginx)
 
@@ -8,33 +8,33 @@ A ready-to-run HashiCorp Vault development environment using GitHub Codespaces, 
 
 ## What's Included
 
-- HashiCorp Vault running with **persistent file storage** on port `8200`
-- Secrets survive Codespace stop/start — stored in `/workspaces/vault-data/`
+- HashiCorp Vault running as a **systemd service** on port `8200` — restarts automatically if it crashes
+- **Persistent file storage** — secrets survive Codespace stop/start, stored in `/workspaces/vault-data/`
 - Auto-unseal on every restart using the stored init file
 - **Userpass auth** pre-configured with a demo user
 - A sample **policy** scoped to `secret/data/demo/*`
-- **Nginx reverse proxy** on port `8100` — accepts HTTP Basic Auth and converts it to a Vault token, enabling iPaaS tools that don't support native Vault token auth
+- **OpenResty reverse proxy** on port `8100` — translates Amplify Fusion's request paths to native Vault API paths
 - Vault UI accessible via forwarded port `8200`
 
 ---
 
-## How the Nginx Proxy Works
+## How the Proxy Works
 
-Many iPaaS tools (including Amplify Fusion) only support HTTP Basic Auth. Vault natively uses token-based auth, so a direct connection doesn't work. The Nginx proxy bridges this gap:
+Amplify Fusion constructs Vault API requests using non-standard path formats and GitHub Codespaces strips the `Authorization` header. The OpenResty proxy on port `8100` handles both issues transparently:
 
-1. Fusion sends a request to port `8100` with `Authorization: Basic <base64(username:password)>`
-2. Nginx decodes the credentials and calls `POST /v1/auth/userpass/login/<username>` on Vault
-3. Vault returns a client token
-4. Nginx caches the token for 5 minutes, strips the `Authorization` header, adds `X-Vault-Token`, and proxies the request to Vault on port `8200`
-5. Vault responds normally
+| Fusion sends | Vault expects | Rewrite |
+|---|---|---|
+| `POST /auth/<mount>/login/<user>` | `POST /v1/auth/userpass/login/<user>` | Auth path rewrite |
+| `GET /root/<path>` | `GET /v1/secret/data/<path>` | Secret path rewrite |
+| Everything else | Pass through as-is | No rewrite |
 
 ---
 
 ## Quick Start
 
-1. Click the **Open in GitHub Codespaces** button above
-2. Wait for the Codespace to build and the startup script to finish (~2 min)
-3. Open the **Ports** tab — both port `8200` (Vault UI) and port `8100` (proxy) will be forwarded and set to Public
+1. Click **Open in GitHub Codespaces** above
+2. Wait for the Codespace to build and startup script to finish (~3-5 min first run, ~30s after)
+3. Open the **Ports** tab — ports `8200` (Vault UI) and `8100` (proxy) are forwarded and set to Public automatically
 
 ---
 
@@ -46,7 +46,7 @@ Many iPaaS tools (including Amplify Fusion) only support HTTP Basic Auth. Vault 
 | Username | `demo` |
 | Password | `demo1234` |
 | Vault UI | `http://localhost:8200/ui` |
-| Proxy URL (for iPaaS) | `https://<codespace-name>-8100.app.github.dev` |
+| Proxy URL | `https://<codespace-name>-8100.app.github.dev` |
 
 ```bash
 # Retrieve credentials at any time
@@ -55,6 +55,8 @@ bash get-token.sh
 # Or get root token directly
 cat /workspaces/vault-data/.vault-init | jq -r '.root_token'
 ```
+
+> **Tip:** Log into the Vault UI using the **Username** method with `demo` / `demo1234` — no token needed.
 
 ---
 
@@ -69,11 +71,7 @@ cat /workspaces/vault-data/.vault-init | jq -r '.root_token'
 | Username | `demo` |
 | Password | `demo1234` |
 
-> Find your codespace name in the **Ports** tab — the forwarded address for port 8100 is your Base URL.
-
-**How the proxy handles Fusion's requests:**
-
-Fusion constructs auth requests as `POST /auth/<mount>/login/<username>` without the `/v1/` prefix. The Nginx proxy automatically rewrites these to the correct Vault path `POST /v1/auth/userpass/login/<username>` and adds the `/v1/` prefix to all other requests as needed. This happens transparently — no changes needed in Fusion.
+> Find your Base URL in the **Ports** tab — copy the forwarded address for port `8100`.
 
 ---
 
@@ -82,8 +80,35 @@ Fusion constructs auth requests as `POST /auth/<mount>/login/<username>` without
 | Port | Purpose | Required |
 |------|---------|----------|
 | `8200` | Vault API and UI | Yes |
-| `8100` | Nginx Basic Auth proxy (for iPaaS) | Yes — use this for external connections |
-| `8201` | Vault cluster communication (HA/Raft) | No — single node setup, not needed |
+| `8100` | OpenResty proxy for iPaaS tools | Yes — use this for Fusion |
+| `8201` | Vault cluster port (HA/Raft) | No — single node, not needed |
+
+---
+
+## Service Management
+
+Both Vault and OpenResty run as systemd services and restart automatically if they crash:
+
+```bash
+# Check status
+sudo systemctl status vault
+sudo systemctl status openresty
+
+# View logs
+sudo journalctl -u vault -f
+cat /tmp/nginx-access.log
+cat /tmp/nginx-error.log
+
+# Restart manually
+sudo systemctl restart vault
+sudo systemctl restart openresty
+```
+
+After restarting Vault you must unseal it:
+```bash
+UNSEAL_KEY=$(jq -r '.unseal_keys_b64[0]' /workspaces/vault-data/.vault-init)
+vault operator unseal "$UNSEAL_KEY"
+```
 
 ---
 
@@ -110,14 +135,14 @@ vault kv get secret/demo/myapp
 ```
 .
 ├── .devcontainer/
-│   ├── devcontainer.json     # Codespace config — forwards ports 8200 and 8100
-│   └── start-vault.sh        # Installs Vault + Nginx, bootstraps auth
+│   ├── devcontainer.json     # Codespace config — ports, env vars, startup
+│   └── start-vault.sh        # Installs and starts Vault + OpenResty as systemd services
 ├── vault-config/
-│   └── vault.hcl             # File storage backend config
+│   └── vault.hcl             # Vault file storage backend config
 ├── nginx/
-│   └── nginx.conf            # Basic Auth → Vault token proxy config
+│   └── nginx.conf            # OpenResty path-rewriting proxy config
 ├── policies/
-│   └── demo-policy.hcl       # Sample Vault policy
+│   └── demo-policy.hcl       # Vault policy for demo user
 ├── get-token.sh              # Helper to print credentials
 ├── .gitignore
 └── README.md

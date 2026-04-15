@@ -7,18 +7,13 @@ vault-data/
 *.vault-init
 
 # Vault logs and PIDs
-vault.log
-nginx.log
 *.log
 *.pid
 
-# Vault tokens and credentials - NEVER commit these
+# Vault tokens and credentials - NEVER commit
 .vault-token
 vault-token.txt
 *.token
-
-# Policy files with sensitive content
-generated-policies/
 
 # Environment files
 .env

@@ -23,7 +23,7 @@ fi
 # Remove IPC_LOCK capability — Codespaces blocks it
 sudo setcap cap_ipc_lock=-ep $(which vault) 2>/dev/null || true
 
-# ── Install Vault as a systemd service ───────────────────────────────────────
+# ── Run Vault as a systemd service ───────────────────────────────────────────
 sudo tee /etc/systemd/system/vault.service > /dev/null << EOF
 [Unit]
 Description=HashiCorp Vault
@@ -93,7 +93,7 @@ if ! command -v /usr/local/openresty/nginx/sbin/nginx &>/dev/null; then
   echo "OpenResty installed."
 fi
 
-# ── Install OpenResty as a systemd service ────────────────────────────────────
+# ── Run OpenResty as a systemd service ───────────────────────────────────────
 sudo tee /etc/systemd/system/openresty.service > /dev/null << EOF
 [Unit]
 Description=OpenResty Vault Proxy
@@ -137,7 +137,8 @@ echo ""
 echo "  To retrieve credentials later, run: bash get-token.sh"
 echo ""
 echo "✅ Vault + OpenResty are running as systemd services!"
-echo "   Vault will restart automatically if it crashes."
+echo "   sudo systemctl status vault"
+echo "   sudo systemctl status openresty"
 echo ""
 echo "⚠️  The init file (unseal key + root token) is stored at:"
 echo "   $INIT_FILE"

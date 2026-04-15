@@ -12,7 +12,7 @@
       "visibility": "public"
     },
     "8100": {
-      "label": "Vault Basic Auth Proxy",
+      "label": "Vault Proxy (iPaaS)",
       "onAutoForward": "notify",
       "visibility": "public"
     }
@@ -20,6 +20,7 @@
   "postCreateCommand": "chmod +x .devcontainer/start-vault.sh get-token.sh",
   "postStartCommand": "bash .devcontainer/start-vault.sh",
   "remoteEnv": {
-    "VAULT_ADDR": "http://127.0.0.1:8200"
+    "VAULT_ADDR": "http://127.0.0.1:8200",
+    "VAULT_DISABLE_MLOCK": "true"
   }
 }

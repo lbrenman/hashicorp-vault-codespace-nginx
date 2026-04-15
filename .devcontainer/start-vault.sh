@@ -77,9 +77,9 @@ if ! command -v /usr/local/openresty/nginx/sbin/nginx &>/dev/null; then
 fi
 
 # ── Start OpenResty proxy (port 8100 → 8200) ─────────────────────────────────
-echo "Starting Nginx/OpenResty Basic Auth proxy on port 8100..."
+echo "Starting OpenResty Basic Auth proxy on port 8100..."
 sudo /usr/local/openresty/nginx/sbin/nginx \
-  -c "$REPO_DIR/nginx/nginx.conf" 2>/tmp/nginx-start.log || {
+  -c "$REPO_DIR/nginx/nginx.conf" > /tmp/nginx-start.log 2>&1 || {
   echo "⚠️  OpenResty failed to start. Check /tmp/nginx-start.log"
   cat /tmp/nginx-start.log
 }

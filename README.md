@@ -8,7 +8,7 @@ A ready-to-run HashiCorp Vault development environment using GitHub Codespaces, 
 
 ## What's Included
 
-- HashiCorp Vault running as a **systemd service** on port `8200` — restarts automatically if it crashes
+- HashiCorp Vault running as a **background process** on port `8200`
 - **Persistent file storage** — secrets survive Codespace stop/start, stored in `/workspaces/vault-data/`
 - Auto-unseal on every restart using the stored init file
 - **Userpass auth** pre-configured with a demo user
@@ -168,3 +168,36 @@ vault write auth/userpass/users/newuser \
 ```bash
 vault policy write my-policy policies/my-policy.hcl
 ```
+
+## Adding Secrets
+
+**1. Log into the UI**
+Go to `http://localhost:8200/ui` and log in with either your root token or `demo` / `demo1234` (Username method).
+
+**2. Navigate to Secrets**
+Click **Secrets Engines** in the left sidebar. You should see a `secret/` KV v2 engine listed (created by the bootstrap script).
+
+**3. Go into the KV engine**
+Click on `secret/` to open it.
+
+**4. Create a new secret**
+Click the **Create secret** button (top right).
+
+**5. Fill in the form**
+- **Path** — the path for your secret, e.g. `demo/myapp` (this becomes `secret/data/demo/myapp`)
+- **Key / Value** — add one or more key-value pairs, e.g. `api_key` = `abc123`
+- Click **Add** to add more key-value pairs
+- Click **Save** when done
+
+**6. Verify via CLI**
+```bash
+vault kv get secret/demo/myapp
+```
+
+---
+
+**A few things to know:**
+
+- The `demo` user's policy only allows access under `secret/data/demo/*` — so paths like `secret/myapp` (outside the `demo/` prefix) will be denied. Use the root token if you need to write outside that path.
+- KV v2 automatically versions secrets — every save creates a new version, and you can view/restore old versions from the UI under the **Version** dropdown on a secret's detail page.
+- To delete, use the **Delete** button on the secret detail page — KV v2 soft-deletes by default, so the data is recoverable unless you choose **Destroy**.

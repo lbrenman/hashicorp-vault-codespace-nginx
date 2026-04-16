@@ -72,6 +72,7 @@ cat /workspaces/vault-data/.vault-init | jq -r '.root_token'
 | Password | `demo1234` |
 
 > Find your Base URL in the **Ports** tab — copy the forwarded address for port `8100`.
+> Note that you do not need /v1 in the Base URL as it is managed in Nginx
 
 ---
 

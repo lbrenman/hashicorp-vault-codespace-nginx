@@ -63,6 +63,7 @@ if ! vault auth list 2>/dev/null | grep -q "userpass"; then
   vault auth enable userpass
   vault policy write demo-policy "$REPO_DIR/policies/demo-policy.hcl"
   vault secrets enable -path=secret kv-v2
+  vault secrets tune -options=cas_required=false secret/
   vault write auth/userpass/users/demo \
     password="demo1234" \
     policies="demo-policy"

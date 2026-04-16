@@ -202,3 +202,17 @@ vault kv get secret/demo/myapp
 - The `demo` user's policy only allows access under `secret/data/demo/*` — so paths like `secret/myapp` (outside the `demo/` prefix) will be denied. Use the root token if you need to write outside that path.
 - KV v2 automatically versions secrets — every save creates a new version, and you can view/restore old versions from the UI under the **Version** dropdown on a secret's detail page.
 - To delete, use the **Delete** button on the secret detail page — KV v2 soft-deletes by default, so the data is recoverable unless you choose **Destroy**.
+
+## Add new keys to your secret
+
+* Navigate to Secrets Engines → secret → demo → myapp
+* Click Create new version +
+* You'll see all existing keys — add a new row by clicking Add
+* Enter the new key name and value
+* Click Save
+
+## Restore Hashicorp to initial state
+
+Nuclear option — delete /workspaces/vault-data/ entirely and restart the Codespace, which triggers a full re-initialization from scratch including new unseal key and root token
+
+> This is useful for setup demos
